@@ -1,0 +1,23 @@
+** 介绍
+
+   这是 [[http://danielwestheide.com/scala/neophytes.html][The Neophyte's Guide to Scala]] 的中文翻译 - “Scala 新手指南”。
+
+   “The Neophyte's Guide to Scala” 是 [[ https://twitter.com/kaffeecoder][Daniel Westheide]] 写的一系列有关 Scala 的文章。
+   同时，原作者在 leanpub 中将此系列博客打包成书，如果你觉得这个翻译对你有帮助，请到 [[https://leanpub.com/theneophytesguidetoscala][原作者那里]] 给予他支持！
+
+
+** 为什么会有这个翻译
+
+   在读书和学习过程中，我一直存在着一个弱点 -  /很难坚持做好一件事情/  。
+   对于专业知识，凡事不明白的我都想一探到底，
+   但由于自身的知识缺陷太大，很多东西到最后都无法坚持下来，
+   这导致我很容易产生挫败感。
+
+   这个翻译的存在是我对付这种挫败感的第一次 *坚持* 。
+   虽然这个翻译耗时不是很长，但毕竟花了整整一个月的心血，翻译、校对，今天终于完成了，也算不愧初心。
+
+   当然，凡事都不是尽善尽美的，翻译中必然存在理解偏差和用词不当的地方。欢迎任何建议和 Pull Requests ！
+
+** 许可
+
+   CC0 1.0 Universal
