@@ -1,0 +1,627 @@
+** Actor System 中的错误处理机制
+   上一章介绍了 Scala 并发的第二大基石：actor 模型，与基于 future 和 promise 的模型相互补充。
+   你应该学会了：
+
+   - actor 的定义和创建
+   - 消息的发送和处理，可能会修改的内部状态
+   - 以及异步的消息响应
+
+   希望这些足够引起你对 actor 并发模型的兴趣。
+   上一章我保留了一些开发 actor 应用程序所应该知道的重要的概念。
+
+   actor 模型意在帮助你实现应用程序的高容错性。
+   这一章，我们准备看看 actor 应用程序的错误处理机制，
+   与传统的层级服务架构的错误处理有本质上的不同。
+
+   该错误处理机制关联着 Akka 的一些核心概念，以及组成 actor 系统的一些元素。
+   因此，这篇文章也作为这些理念和组件的一个指南。
+
+*** Actor 层级
+
+    在探知错误发生所引起的事件之前，
+    有必要先介绍 actor 并发背后的一个至关重要的原则：actor 之间是一种层级关系，
+    这个原则是构建并发容错程序的基本。
+
+    这是什么意思？
+    首先，这意味着，每个 actor 都有一个父 actor，都可以创建多个子 actor，
+    你可以把 actor 系统简单想象成一个金字塔。
+    父 actor 看管它的“孩子们”，并在孩子跌倒的时候扶他们起来，就像现实生活中那样。
+    你即将看到这一切是如何完成的。
+
+**** 作为守卫的 Actor
+
+     上一章，我们有两种不同的 actor： ~Barista~ 和 ~Customer~ 。
+     这里不会重复它们的定义，只关注它们各自的创建方式：
+     调用 ~ActorSystem~ 的 ~actorOf~ 方法。
+
+     #+BEGIN_SRC scala
+       import akka.actor.ActorSystem
+       val system = ActorSystem("Coffeehouse")
+       val barista = system.actorOf(Props[Barista], "Barista")
+       val customer = system.actorOf(Props(classOf[Customer], barista), "Customer")
+     #+END_SRC
+
+     那谁是这两个 actor 的“父母”呢？actor 系统？不准确，但已经很接近了。
+     actor 系统本身并不是 actor，但它有一个叫做 /守卫/ 的 actor，
+     充当用户根级 actor（直接在 ~ActorSystem~ 上调用 ~actorOf~ 方法产生的那些 actor） 的父母。
+
+     系统中，守卫 actor 不应该有太多的子 actor。
+     最好是只有不多的几个根级 actor，它们再把工作分发给各自的子 actor。
+
+
+**** Actor 路径
+
+     查看 /actor 路径(actor path)/ 可以很清晰的看到 actor 系统的层级结构。
+     actor 路径是一种 URL，根据它来寻址 actor。
+     你可以用 ~path~ 方法来查看它：
+
+     #+BEGIN_SRC scala
+       barista.path // => akka.actor.ActorPath = akka://Coffeehouse/user/Barista
+       customer.path // => akka.actor.ActorPath = akka://Coffeehouse/user/Customer
+     #+END_SRC
+
+     actor 路径是一种 akka 协议，协议后跟着三个部分：
+
+     1. =Coffeehouse= ：actor system 的名字。
+     2. =user= ：守卫 actor 的名字。
+     3. =Barista= 和 =Customer=  ：调用 ~actorof~ 时创建的 actor 名字。
+
+     如果是一个运行在不同机器上的远程 actor，你可能还会看见主机地址和端口号。
+
+     actor 路径可以用来进行 actor 查询。
+     比如说，除了直接在构造器中添加 ~barista~ 引用，
+     actor ~Customer~ 还可以在它的 ~ActorContext~ 上调用 ~actorSelection~ 方法
+     来查找 ~Barista~ ， ~actorSelection~ 接受一个相对路径字符串：
+
+     #+BEGIN_SRC scala
+       context.actorSelection("../Barista")
+     #+END_SRC
+
+     然而，虽然这样的查询方式用起来非常顺手，但更好的做法还是在构造器中传递依赖。
+     过于了解依赖在 actor 系统中的位置会让系统更容易出 bug，而且不利于重构。
+
+
+**** 一个例子
+
+     为了说明“父母是怎么看管它们的孩子”，以及它和保持系统容错性的关系，
+     我们回到那个咖啡屋的例子。
+     给 ~Barista~ 添加一个子 actor，让这个子 actor 去处理咖啡馆的一些工作。
+
+     如果真的为一个咖啡馆服务生的工作建模，可能会为所有不同的子任务都创建一个子 actor。
+     但是为了保持文章的专注度，这个例子做了一些简化。
+
+     假设服务生有了一个收银机，它处理交易，打印收据，并相应的增加日销售额。
+     下列代码是收银机的第一个版本：
+
+     #+BEGIN_SRC scala
+       import akka.actor._
+       object Register {
+         sealed trait Article
+         case object Espresso extends Article
+         case object Cappuccino extends Article
+         case class Transaction(article: Article)
+       }
+       class Register extends Actor {
+         import Register._
+         import Barista._
+         var revenue = 0
+         val prices = Map[Article, Int](Espresso -> 150, Cappuccino -> 250)
+         def receive = {
+           case Transaction(article) =>
+             val price = prices(article)
+             sender ! createReceipt(price)
+             revenue += price
+         }
+         def createReceipt(price: Int): Receipt = Receipt(price)
+       }
+     #+END_SRC
+
+     它包含了一个不可变映射表，保存了每件商品的价格，
+     还包含了一个整形变量，代表营业额。
+     每收到一个 ~Transaction~ 消息，它就相应的增加营业额，返回一个收据给发送者。
+
+     ~Register~ 应该是 ~Barista~ 的一个子 actor，也就是说，
+     我们不会从 actor 系统中创建它，而是在 ~Barista~ actor 里创建。
+     这个“成为父母”的 actor 的初始版本看起来会是这个样子：
+
+
+     #+BEGIN_SRC scala
+       object Barista {
+         case object EspressoRequest
+         case object ClosingTime
+         case class EspressoCup(state: EspressoCup.State)
+         object EspressoCup {
+           sealed trait State
+           case object Clean extends State
+           case object Filled extends State
+           case object Dirty extends State
+         }
+         case class Receipt(amount: Int)
+       }
+       class Barista extends Actor {
+         import Barista._
+         import Register._
+         import EspressoCup._
+         import context.dispatcher
+         import akka.util.Timeout
+         import akka.pattern.ask
+         import akka.pattern.pipe
+         import concurrent.duration._
+
+         implicit val timeout = Timeout(4.seconds)
+         val register = context.actorOf(Props[Register], "Register")
+         def receive = {
+           case EspressoRequest =>
+             val receipt = register ? Transaction(Espresso)
+             receipt.map((EspressoCup(Filled), _)).pipeTo(sender)
+           case ClosingTime => context.stop(self)
+         }
+       }
+     #+END_SRC
+
+     代码定义了 ~Barista~ 能够处理的消息类型。
+     并使用 sealed trait 确保 ~EspressoCup~ 只能有固定几个的状态。
+
+     最有意思的部分是在 ~Barista~ 实现中。
+     导入 ~dispatcher~ 、 ~ask~ 、 ~pipe~ 以及隐式的 ~timeout~ 是有必要的，
+     因为在 ~Receive~ 偏函数中使用了 Akka 的 ~ask~ 语法还有 future。
+     当接收到一个 ~EspressoRequest~ ， ~Barista~ 向 ~Register~ 要这次 ~Transaction~ 的 ~Receipt~ 。
+     然后，把这个 ~Receipt~ 和 装满浓咖啡的 ~EspressoCup~ 输送给消息发送者，
+     后者就会收到一个 ~(EspressoCup, Receipt)~ 元组。
+     把子任务交给子 actor 完成，然后再汇总和完善，这种运作方式在 actor 程序中很典型。
+
+     还请注意，子 actor 的创建是通过调用 ~context.actorOf~ 完成的，~context~ 是 ~Barista~ 的 ~ActorContext~ 。
+
+     最后就是 ~Customer~ actor 了：
+
+
+     #+BEGIN_SRC scala
+       object Customer {
+         case object CaffeineWithdrawalWarning
+       }
+       class Customer(coffeeSource: ActorRef) extends Actor with ActorLogging {
+         import Customer._
+         import Barista._
+         import EspressoCup._
+         def receive = {
+           case CaffeineWithdrawalWarning => coffeeSource ! EspressoRequest
+           case (EspressoCup(Filled), Receipt(amount)) =>
+             log.info(s"yay, caffeine for ${self}!")
+         }
+       }
+     #+END_SRC
+
+     这个 actor 没有什么新鲜的东西，除了 ~ActorLogging~ 这个特质之外。
+     ~ActorLogging~ 可以让我们记录日志，取代之前的控制台输出。
+
+     现在就可以启动这个例子了，创建 actor 系统，加入一个 ~Barista~ ，两个 ~Customer~ ：
+
+     #+BEGIN_SRC scala
+       import Customer._
+       val system = ActorSystem("Coffeehouse")
+       val barista = system.actorOf(Props[Barista], "Barista")
+       val customerJohnny = system.actorOf(Props(classOf[Customer], barista), "Johnny")
+       val customerAlina = system.actorOf(Props(classOf[Customer], barista), "Alina")
+       customerJohnny ! CaffeineWithdrawalWarning
+       customerAlina ! CaffeineWithdrawalWarning
+     #+END_SRC
+
+     正在尝试它的读者应该会看到两个日志消息。
+
+
+*** 崩溃还是不崩溃？
+
+    然而，这篇文章要做的事情不是取悦顾客，而是想知道事情出错时的情况。
+
+    收银机是一个易坏的装置：它的打印功能不是很可靠，时常会遇到卡纸的问题。
+    为了体现这一点， 在 ~Register~ 伴生对象中添加 ~PaperJamException~ 类型：
+
+
+    #+BEGIN_SRC scala
+      class PaperJamException(msg: String) extends Exception(msg)
+    #+END_SRC
+
+    然后，更改 ~Register~ 的 ~createReceipt~ 方法：
+
+    #+BEGIN_SRC scala
+      def createReceipt(price: Int): Receipt = {
+        import util.Random
+        if (Random.nextBoolean())
+          throw new PaperJamException("OMG, not again!")
+        Receipt(price)
+      }
+    #+END_SRC
+
+    这样， ~Register~ 在处理 ~Transaction~ 消息时，会有一半的概率出现 ~PaperJamException~ 。
+
+    这对整个 actor 系统整个应用程序有什么影响呢？
+    幸运的是，Akka 鲁棒性很好，不会被代码中的异常所影响。
+    不过，它会提醒这个“行为不端”的孩子的父母，由父母决定在这种情况下该怎么做。
+
+
+**** 监控策略
+
+     然而，父 actor 不是在 ~Receive~ 偏函数中处理子 actor 的异常，
+     这样会干扰父 actor 的行为逻辑。
+     Akka 将它们被分的很清楚。
+
+     每个 actor 会为自己定义一个 /监控策略(supervisor strategy)/ ，
+     它告诉 Akka 该怎么处理发生在孩子身上的错误。
+
+     有两种基本的监控策略： ~OneForOneStrategy~ 和 ~AllForOneStrategy~ 。
+     在处理某个孩子的错误时，前者只会影响这个出现错误的孩子，而后者会影响所有的孩子。
+     选择哪种策略最好根据应用程序来定。
+
+     无论选择哪种  ~SupervisorStrategy~ ，你都要指定一个 ~Decider~ ，
+     它是一个 ~PartialFunction[Throwable, Directive]~ ，允许你匹配某些 ~Throwable~ 子类型，
+     并为每个类型确定处理动作。
+
+
+**** 指令
+
+     下面是一些可用的指令：
+
+
+     #+BEGIN_SRC scala
+       sealed trait Directive
+       case object Resume extends Directive
+       case object Restart extends Directive
+       case object Stop extends Directive
+       case object Escalate extends Directive
+     #+END_SRC
+
+     - *恢复(Resume)* ：选择 ~Resume~ ，可能你认为这个异常并不是那么的异常，
+       子 actor 会恢复运行，就像什么都没发生一样。
+     - *重启(Restart)* ： ~Restart~ 指令会造成 Akka 创建新的子 actor 。
+       可能你觉得子 actor 的内部状态被打断了，不能再正确的处理消息，
+       想通过重启子 actor 来重置内部状态。
+     - *停止(Stop)* ：杀死子 actor，它不会被重启了。
+     - *扩大(Escalate)* ：选择 ~Escalate~ ，可能你不知道该怎么处理当前的错误。
+       你决定把决定权交你你的父 actor，希望它比你明智。
+       如果一个 actor 决定将错误扩大化（抛给上层），那它自己可能也会被重启，
+       因为它的父 actor 只会
+
+
+**** 默认策略
+
+     你无需为每一个 actor 都指定自己的监控策略。
+     事实上，到现在我们都没有这样做过，
+     默认的监控策略在起着作用。它看起来可能是这样：
+
+
+     #+BEGIN_SRC scala
+       final val defaultStrategy: SupervisorStrategy = {
+         def defaultDecider: Decider = {
+           case _: ActorInitializationException => Stop
+           case _: ActorKilledException         => Stop
+           case _: Exception                    => Restart
+         }
+         OneForOneStrategy()(defaultDecider)
+       }
+     #+END_SRC
+
+     默认的策略是：
+     对 ~ActorInitializationException~ 和 ~ActorKilledException~ 之外的所有异常，
+     相应的子 actor 都会重启。
+
+     因此，当 ~PaperJamException~ 发生在 ~Register~ 中，父 actor (~barista~) 的监控策略
+     会造成 ~Register~ 重启，毕竟我们没有重写默认的监控策略。
+
+     如果你在尝试这个例子，日志中应该会有一个异常堆栈跟踪，但不会有任何 actor 重启的痕迹。
+
+     这一事实是可以被验证的，但在这之前，我们先来看看 actor 生命周期。
+
+
+**** Actor 生命周期
+
+     知道 actor 的生命周期对理解监控策略给出的指令是非常有帮助的。
+     通俗来讲，它是这样的：
+     当通过 ~actorOf~ 创建之后，actor 就 /启动(started)/ 了。
+     之后，它可以被多次 /重启(restarted)/ ，以应对异常。
+     最后，它可以被 /终结(stoped)/ ，结束一生。
+
+     在整个周期里，有很多可以被重写的钩子方法。
+     我们先来看看这些钩子方法的默认实现：
+
+     - *启动前(preStart)* ：在 actor 启动时调用，可以进行一些初始化工作。默认实现是空的。
+     - *终止后(postStop)* ：在 actor 停止后使用，可以进行一些资源清理工作。默认实现也是空的。
+     - *重启前(preRestart)* ：在一个崩溃的 actor 被重启之前调用。
+     默认，它会终止所有子 actor，并调用 ~postStop~ 方法清理自身的资源。
+     - *重启后(postRestart)* ：在 actor 重启之后调用。默认会调用 ~preStart~ 方法。
+
+     这说明，重启一个 actor 会默认的重启所有的子 actor。
+     这可能就是你想要的。如果不是，这些钩子方法也允许你改变这种行为。
+
+     现在就可以来验证 ~Register~ 到底有没有被重启了。
+     让 ~Register~ 类型扩展 ~ActorLogging~ 特质，并添加如下方法：
+
+
+     #+BEGIN_SRC scala
+       override def postRestart(reason: Throwable) {
+         super.postRestart(reason)
+         log.info(s"Restarted because of ${reason.getMessage}")
+       }
+     #+END_SRC
+
+     现在，再去给 ~Customer~ 发送 ~CaffeineWithdrawalWarning~ 消息，
+     你就能看到日志输出中含有 ~Register~ actor 重启的信息。
+
+
+**** Actor 的死亡
+
+     有时候，一次又一次的重启 actor 是不合情理的。
+     考虑一个通过网络和其他服务交互的 actor，这服务可能在某一段时间里不可用。
+     这种情况下，一个好的办法是告诉 Akaa 在一个时间段里可以重启 actor 多少次，
+     如果超过这个上限，就终止 actor。
+     这样的限制可以在监控策略的构造器中进行配置：
+
+
+     #+BEGIN_SRC scala
+       import scala.concurrent.duration._
+       import akka.actor.OneForOneStrategy
+       import akka.actor.SupervisorStrategy.Restart
+       OneForOneStrategy(10, 2.minutes) {
+         case _ => Restart
+       }
+     #+END_SRC
+
+
+**** 自愈系统？
+
+     那么，无论什么时候该死的卡纸事件发生，我们的系统都可以流畅运行并自我修复吗？
+     我们来更改一下日志输出：
+
+
+     #+BEGIN_SRC scala
+       override def postRestart(reason: Throwable) {
+         super.postRestart(reason)
+         log.info(s"Restarted, and revenue is $revenue cents")
+       }
+     #+END_SRC
+
+     也为 ~Receive~ 偏函数添加更多的日志：
+
+
+     #+BEGIN_SRC scala
+       def receive = {
+         case Transaction(article) =>
+           val price = prices(article)
+           sender ! createReceipt(price)
+           revenue += price
+           log.info(s"Revenue incremented to $revenue cents")
+       }
+     #+END_SRC
+
+     再运行一次！结果显然不是它应该有的样子。
+     在日子里，你会看到营业额在增加，但是只要出现卡纸问题， ~Register~ 重启之后，它就会重置为 0。
+     这是因为重启确实导致旧的 ~Barista~ 实例被丢掉，新的一个被创建出来。
+
+     当然，我们可以更改监控策略，在出现 ~PaperJamException~ 时恢复它：
+
+     #+BEGIN_SRC scala
+       val decider: PartialFunction[Throwable, Directive] = {
+         case _: PaperJamException => Resume
+       }
+       override def supervisorStrategy: SupervisorStrategy =
+         OneForOneStrategy()(decider.orElse(SupervisorStrategy.defaultStrategy.decider))
+     #+END_SRC
+
+     现在，actor 的状态就不会被重置了。
+
+
+**** Error kernel
+
+     我们刚刚找到一个保持 ~Register~ 内部状态的方法，对吧？
+
+     有时候，恢复 actor 的运行是最好的方式。
+     但是，假定我们真的需要重启它，因为不这样做，卡纸问题就不会消失。
+     维护一个布尔值就可以模拟这种情况：
+
+     #+BEGIN_SRC scala
+       class Register extends Actor with ActorLogging {
+         import Register._
+         import Barista._
+         var revenue = 0
+         val prices = Map[Article, Int](Espresso -> 150, Cappuccino -> 250)
+         var paperJam = false
+         override def postRestart(reason: Throwable) {
+           super.postRestart(reason)
+           log.info(s"Restarted, and revenue is $revenue cents")
+         }
+         def receive = {
+           case Transaction(article) =>
+             val price = prices(article)
+             sender ! createReceipt(price)
+             revenue += price
+             log.info(s"Revenue incremented to $revenue cents")
+         }
+         def createReceipt(price: Int): Receipt = {
+           import util.Random
+           if (Random.nextBoolean()) paperJam = true
+           if (paperJam) throw new PaperJamException("OMG, not again!")
+           Receipt(price)
+         }
+       }
+     #+END_SRC
+
+     上述代码还移除了监控策略。
+
+     现在，卡纸问题会一直存在，除非 actor 重启，
+     但重启 actor 又会丢掉重要的内部状态。
+
+     这种情况下，可以使用 /error pattern/ 。
+     error pattern 只是一种要尽可能遵循的设计方针：
+     如果一个 actor 带有重要的内部信息，那么它应该把危险的任务交给子 actor 去做，
+     这样，携带状态的 actor 可以避免不必要的崩溃。
+
+     合理的设计有时候会为每种危险任务都创建一个子 actor，但这不是必须的。
+
+     现在把这个模式应用到 ~Register~ 上。
+     保留它的营业额状态，将可能出现错误的收据打印任务移动到一个叫做 ~ReceiptPrinter~ 的子 actor 中：
+
+
+     #+BEGIN_SRC scala
+       object ReceiptPrinter {
+         case class PrintJob(amount: Int)
+         class PaperJamException(msg: String) extends Exception(msg)
+       }
+       class ReceiptPrinter extends Actor with ActorLogging {
+         var paperJam = false
+         override def postRestart(reason: Throwable) {
+           super.postRestart(reason)
+           log.info(s"Restarted, paper jam == $paperJam")
+         }
+         def receive = {
+           case PrintJob(amount) => sender ! createReceipt(amount)
+         }
+         def createReceipt(price: Int): Receipt = {
+           if (Random.nextBoolean()) paperJam = true
+           if (paperJam) throw new PaperJamException("OMG, not again!")
+           Receipt(price)
+         }
+       }
+     #+END_SRC
+
+
+     除了一个新的消息类型 ~PrintJob~ 之外，这段代码和 ~Register~ 中的没有什么不同。
+
+     这是一件好事情，不仅仅将危险任务从有状态的 ~Register~ 中移除，还使得代码更简单，更清楚：
+     ~ReceiptPrinter~ 只负责一件事情， ~Register~ 也更简单了，
+     现在它只负责管理营业额，其他的就交给子 actor 做：
+
+
+     #+BEGIN_SRC scala
+       class Register extends Actor with ActorLogging {
+         import akka.pattern.ask
+         import akka.pattern.pipe
+         import context.dispatcher
+         implicit val timeout = Timeout(4.seconds)
+         var revenue = 0
+         val prices = Map[Article, Int](Espresso -> 150, Cappuccino -> 250)
+         val printer = context.actorOf(Props[ReceiptPrinter], "Printer")
+         override def postRestart(reason: Throwable) {
+           super.postRestart(reason)
+           log.info(s"Restarted, and revenue is $revenue cents")
+         }
+         def receive = {
+           case Transaction(article) =>
+             val price = prices(article)
+             val requester = sender
+             (printer ? PrintJob(price)).map((requester, _)).pipeTo(self)
+           case (requester: ActorRef, receipt: Receipt) =>
+             revenue += receipt.amount
+             log.info(s"revenue is $revenue cents")
+             requester ! receipt
+         }
+       }
+     #+END_SRC
+
+     我们并没有为每个 ~Transaction~ 都创建新的 ~ReceiptPrinter~ ，
+     相反，我们使用默认的监控策略，让打印机遇到问题时自动重启。
+
+     代码中值得说明的一点是增加营业额的方式：
+     首先我们向打印机要求一个收据，然后映射成一个包含它和 ~Transaction~ 消息发送者的元组，
+     并输送给它自己。
+     当它自己接收到这个二元元组后，再去增加营业额，返回收据给请求者。
+
+     做这么一种重定向的原因是，我们想确保只在成功打印收据后增加营业额。
+     而且，还有一个至关重要的事情：千万不要在 future 里面修改内部状态，
+     使用重定向可以确保只在本 actor 中修改营业额，而不是在其他的某个线程中。
+     将 ~sender~　赋值给一个　~val~ 也是出于同样的原因：
+     当映射 future 的时候，我们就不在当前这个 actor 的上下文了，
+     由于 ~sender~ 是一个方法，它很可能返回其他某个我们不想要的 actor。
+
+     现在， ~Register~ actor 就可以避免经常性重启了！
+
+
+     当然，把营业额的管理和收据的打印放在一个地方处理还有待考虑，
+     这样做方便于说明 error pattern ，
+     但最好还是把这两个功能分隔开，毕竟这两件事情没有必然联系。
+
+
+**** 超时
+
+     我们可能想要改善的另一件事是超时的处理。
+     目前， ~ReceiptPrinter~ 中发生的异常会导致一个 ~AskTimeoutException~ ，
+     这个异常反映到 ~Barista~ actor 上就变成一个失败的 future。
+
+     ~Barista~ 对这个 future 做个映射，然后就把结果返回给顾客，
+     从而顾客会收到一个含有 ~AskTimeoutException~ 的 ~Failure~ 。
+
+     ~Customer~ 没有问任何事情，它肯定不期望收到这样一个消息，而且事实上它也无法处理这写消息。
+     我们需要友善一点，返回一个 ~ComebackLater~ 消息给顾客，告诉顾客稍后再来取咖啡，
+     这个消息才是顾客真正明白的。
+
+     这种处理方式就好多了，因为顾客永远都不会知道它们可能永远拿不到咖啡。。
+
+     实现它很简单，只需要从 ~AskTimeoutException~ 中恢复，
+     把它映射成 ~ComebackLater~ 消息传递给顾客：
+
+     #+BEGIN_SRC scala
+       def receive = {
+         case EspressoRequest =>
+           val receipt = register ? Transaction(Espresso)
+           receipt.map((EspressoCup(Filled), _)).recover {
+             case _: AskTimeoutException => ComebackLater
+           } pipeTo(sender)
+         case ClosingTime => context.system.shutdown()
+       }
+     #+END_SRC
+
+
+**** 死亡观察
+
+     保持系统容错性另一个很重要的原则是要留意 actor 重要的依赖关系。
+     有时候，一个 actor 会依赖其他的 actors，而后者并不是前者的子 actor，
+     这样，actor 就无法监管这些依赖了。
+     然而，留意它们的状态又是十分重要的，以应对不好的事情发生。
+
+     考虑一个负责数据库访问的 actor。
+     你可能有很多其他的 actor依赖它，需要知晓它是否健康，是否有效。
+     一旦它失效，你可能会让系统进入维护状态，或者用一个备用 actor 来代替。
+
+     无论哪种情况，都需要观察那个被依赖的 actor，以获得它“去世”的消息。
+
+     这可以通过调用 ~ActorContext~ 的 ~watch~ 方法来做到。
+     为了说明这一点，我们让 ~Customer~ 观察 ~Barista~
+     （他们对咖啡是如此的嗜好，说他们依赖咖啡店服务员并不为过）：
+
+     #+BEGIN_SRC scala
+       class Customer(coffeeSource: ActorRef) extends Actor with ActorLogging {
+         import context.dispatcher
+
+         context.watch(coffeeSource)
+
+         def receive = {
+           case CaffeineWithdrawalWarning => coffeeSource ! EspressoRequest
+           case (EspressoCup(Filled), Receipt(amount)) =>
+             log.info(s"yay, caffeine for ${self}!")
+           case ComebackLater =>
+             log.info("grumble, grumble")
+             context.system.scheduler.scheduleOnce(300.millis) {
+               coffeeSource ! EspressoRequest
+             }
+           case Terminated(barista) =>
+             log.info("Oh well, let's find another coffeehouse...")
+         }
+       }
+     #+END_SRC
+
+     除了对 ~coffeeSource~ 进行观察之外，代码还添加了对 ~Terminated~ 消息的处理，
+     如果一个 actor 终止了，我们就会从 Akka 收到这种消息。
+
+     如果向 ~Barista~ 发送一个 ~ClosingTime~ 消息，让它终止自己，
+     ~Customer~ 就能够收到它的死亡信息。
+     试试吧，你应该能看到它们的日志输出。
+
+
+*** 总结
+
+    这一章是我们第二次和 actor 打交道了，
+    你知道了 actor 系统一些重要的组件，
+    以及如何使用 Akka 提供的工具及其背后的理念来提升系统的容错性。
+
+    然而，Akka 和 actor 模型还有很多需要学习的东西，这已经超出本书的范围了。
+    下一章就是这一系列的结尾了，我会给出一大堆有关 Scala 的学习资源，
+    利用它们你可以继续 Scala 征途。
+    而且，如果你对 Akka 感兴趣，下一章也会为你提供一些有帮助的东西。
