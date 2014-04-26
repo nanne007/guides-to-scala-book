@@ -1,0 +1,216 @@
+** 何去何从
+
+   上一章我说过，Scala 新手指南到这里就算结束了。
+   在过去的五个月里，我们一起钻研了很多 Scala 语言特性，
+   希望这能够加深你对它们及其背后理念的理解。
+
+   无论你是参与过 Coursera 上的 Scala 课程[fn:1],
+   还是从其他书中学习的 Scala，
+   作为它的入门资源的补充，我希望本指南起到了这个作用。
+   我尽力去覆盖我在学习这门语言时遇到的所有古怪行为
+   当时，在我能接触到的资源中，这些行为只有一些简要的介绍，
+   有的甚至都没有被提及。
+   我希望本指南对它们的解释能够帮助到你。
+
+   随着这系列文章逐渐的展开，我们大胆的进入了更高级的领地，涵盖了像类型类和路径依赖类型的概念。
+   虽然可以去写更多的神秘功能，但我觉得这会违背这一系列文章的初衷，
+   本指南的目标读者应该是对 Scala 有热情的初学者。
+
+   因此，我将给出一些有关进一步学习 Scala 的建议，以此结束这一系列。
+   请放心，我会继续写关于 Scala 的文章，只是不在本系列的范围内。
+
+   要如何继续你与 Scala 的旅程，这更多的要取决于你的个人喜好：
+   也许现在你想 *教别人学习 Scala* ，或者你对 Scala 的类型系统感到兴奋，
+   想要通过深入研究 *类型编程* 来探索这门语言更加神秘的功能。
+
+   往往，熟悉一种新语言和其整个生态系统的好方法是将其用来 *创造一些有用的东西* ，
+   即真正的应用程序，而不是那些拿来玩的小例子。
+   我个人也通过向开放源码项目 *贡献代码* 获得了很多。
+
+
+   以下，我会阐述四条学习路径，当然，它们并不是相互排斥的，
+   并且，还为你提供许多被强烈推荐的附加资源的链接。
+
+
+*** 讲授 Scala
+
+    通过这系列的文章，你对 Scala 的熟悉程度应该足以用来教授一些基础知识。
+    也许你在一个 Java 或 Ruby 的工作室里，想要让你的同事对 Scala 和函数式编程感兴趣。
+
+    太好了，为何不举办一次讲习班呢？
+    向人们介绍一种新语言的一个好办法就是：以身作则，通过共同解决一些小问题逐步介绍这门语言。
+    不要拿着幻灯片做演讲！积极参与是关键 ！
+
+    如果这些是你想做的事，Scala 社区可以帮到你。
+    看看 Scala Koans[fn:2]，
+    这是一个小课程集合，其中每一个都提供了一个问题，你可以通过修复失败的测试来解决它。
+    该项目的灵感来自 Ruby Koans[fn:3] 项目，
+    是通过小的协作编程来教授语言的很好的资源。
+
+    另一个令人惊异的非常适合举办讲习班或其他事件的项目是 Scalatron[fn:4]，一个机器人虚拟竞技的游戏。
+    为什么不通过在讲习班上开发这样的 Bots 来教授语言呢？
+    开发完毕后，自己还可以和计算机对战。
+    一旦参与者对这门语言足够熟悉了，组织一场比赛，每个参与者都可以开发他们自己的 bot。
+
+
+*** 掌握神秘力量
+
+    我们只看到一点点 Scala 类型系统能够做到的事情。
+    如果这高级魔法留下的小痕迹让你感到兴奋，并且你希望掌握这类型编程的神秘魔法，
+    一个好的起始资源是由 Mark Harrah 写的 Type-Level Programming in Scala[fn:5] 博客系列。
+
+    然后，我推荐你看看 Shapeless[fn:6]，
+    这是 Miles Sabin 在探索 Scala 语言的泛型和多型编程极限时所创建的库。
+
+
+*** 创造有用的东西
+
+    为了对 Scala 有一定的了解，阅读书籍，做做教程，或者随便鼓捣鼓捣它，这些是足够了的。
+    但为了真正适应 Scala 及其编程范式，并学会用 Scala 的方式去想问题，
+    我强烈建议你开始创造一些有用的东西，一些比玩具似的程序复杂的东西
+    （在我看来，这适用于学习任何一门语言）。
+
+    通过解决真实世界的问题，创建一个有用和方便使用的应用程序，
+    你可以获得对库生态系统很好的总览，
+    并且，在特定的情况下，能够感觉出哪个库能服务于你的想法。
+
+
+    要查找你感兴趣的相关的库或更新，
+    您应该订阅 implicit.ly[fn:7] 并定期看看 GitHub 上的 Scala 项目[fn:8]。
+
+**** 有关 Web 的东西
+
+     当今时代，用 Scala 写的应用程序大多数都是某种服务器应用程序，
+     通常通过 HTTP 和 web 前端暴露 rest 风格的接口。
+
+     如果 actor 并发模型很适合你的使用场景，并且你因此选择使用 Akka[fn:9] ，
+     Spray Routing[fn:10] 是一个上佳的选择，用来通过 HTTP 暴露 rest API。
+     如果你不需要 web 前端，或者你想开发一个通过 REST API 和后台交互的单页面 web 应用程序，
+     这会是一个了不起的工具。
+
+     如果你需一些不那么简约的东西，Play[fn:11] 是一个不错的选择，
+     尤其是，你想找广泛采用并有良好支持的东西。
+     它是 Typesafe 的一部分。
+
+
+**** 生活在一个并行的世界
+
+在阅读过两篇有关 actor 和 Akka 的文章后，如果你觉得 Akka 很适合你的应用程序，
+您可能想在认真使用它之前更多的了解它。
+
+虽然 Akka 文档[fn:12] 是相当详尽的并可以作为参考，
+但我认为学习 Akka 的最佳选择是 Derek Wyatt 的书 - Akka Concurrency[fn:13]，
+它的初步版本已经可以通过 PDF 获得了。
+
+一旦你对 Akka 认真起来，你绝对应该订阅 Let it Crash[fn:14]，
+它提供了所有有关 Akka 的新闻和先进的技巧和窍门。
+
+如果 actor 不是你的菜，并且你更喜欢一种能够使用 Futures 可组合性的并发模型，
+Twitter 的 Finagle[fn:15] 可能是你的选择。
+它允许你模块化应用程序，使其成为一群小型的远程服务，并生来就支持众多的流行协议。
+
+
+*** 贡献
+
+    另一种可以快速学到很多 Scala 知识的方法是开始向一个或更多的开放源码项目贡献项目，
+    优先选择那些一直在自己的应用程序中使用的库或者框架。
+
+    当然，还有一件不特定于 Scala 的，但我认为仍然值得一提的事情：
+    如果您是刚刚学习 Scala ，而且没有在日常工作中使用它，
+    那你几乎只有一个选择，从更有经验的 Scala 开发人员身上学习。
+
+    它迫使你阅读大量的其他人的 Scala 代码，发现不同的或者更惯用的解决问题的方式，
+    而且这些经验丰富的开发人员会在 pull requests 中检查你的代码。
+
+    我发现 Scala 社区大多数是非常友好和乐于助人的，
+    所以不要羞于贡献代码，即使你认为你写的 Scala 代码太菜。
+
+    虽然有些项目可能会有他们自己做事情的方式，
+    但学习 Scala 代码风格指南[fn:16]以熟悉常见的代码约定，通常都会是一个好想法。
+
+
+*** 连接
+
+    通过向开放源码项目贡献代码，你已经开始和 Scala 社区有联系了。
+    但是，你可能没有时间去做这些，或者你更喜欢其他的方法来联系志同道合的人。
+
+    尝试查找 Scala 的本地用户组或者聚会组。
+    Scala Tribes[fn:17] 提供了世界各地的 Scala 社区的概览，
+    Lanyrd 的 Scala 主题[fn:18] 能够让你及时了解任何与 Scala 相关的事件，无论是会议还是聚会。
+
+    如果你不喜欢在现实中有什么联系，
+    Scala 用户邮件列表[fn:19]和 Scala IRC 频道[fn:20]，可能是很好的替代品。
+
+
+*** 其他资源
+
+    无论你走上面所述的哪条路，我都想推荐几个资源：
+
+    - Paul Chiusano 和 Rúnar Bjarnason 的 Functional Programming in Scala[fn:21]，
+    可以获得它的早期访问版，它会教你很多关于函数式编程的知识，以及如何从函数式的角度去思考问题。
+    - Scala 文档站点[fn:22]，
+    出于某种原因，在 Scala 主网站上没有明显的链接来访问到它，尤其是它的 指南[fn:23] 和 教程[fn:24]。
+    - Kelsey Innis 的 Resources for Getting Started With Functional Programming and Scala[fn:25]，
+    包含更多有关我们在本系列中所涉及的主题的链接。
+
+
+*** 结论
+
+   我希望这一系列让你很享受，可以燃起你对 Scala 的兴趣。
+   虽然这一系列即将结束，
+   我真心地希望它只是个你在 Scala 王国的旅程的开始。
+   请在评论中让我知道你的旅程现在怎么样了，以及下一步会去向哪里。
+
+
+* Footnotes
+
+[fn:1] https://www.coursera.org/course/progfun
+
+[fn:2] http://www.scalakoans.org
+
+[fn:3] http://rubykoans.com
+
+[fn:4] http://scalatron.github.io
+
+[fn:5] http://apocalisp.wordpress.com/2010/06/08/type-level-programming-in-scala/
+
+[fn:6] https://github.com/milessabin/shapeless
+
+[fn:7] http://notes.implicit.ly
+
+[fn:8] https://github.com/trending?l=scala
+
+[fn:9] http://akka.io
+
+[fn:10] http://spray.io/documentation/1.2.1/spray-routing/
+
+[fn:11] http://www.playframework.com
+
+[fn:12] http://akka.io/docs/
+
+[fn:13] http://www.artima.com/shop/akka_concurrency
+
+[fn:14] http://letitcrash.com
+
+
+[fn:15] http://twitter.github.io/finagle/
+
+[fn:16] http://docs.scala-lang.org/style/
+
+[fn:17] http://www.scala-tribes.org
+
+[fn:18] http://lanyrd.com/topics/scala/
+
+[fn:19] https://groups.google.com/forum/#!forum/scala-user
+
+[fn:20] irc://irc.freenode.net/scala
+
+[fn:21] http://www.manning.com/bjarnason/
+
+[fn:22] http://docs.scala-lang.org
+
+[fn:23] http://docs.scala-lang.org/overviews/
+
+[fn:24] http://docs.scala-lang.org/tutorials/
+
+[fn:25] http://nerd.kelseyinnis.com/blog/2013/01/07/resources-for-getting-started-with-functional-programming-and-scala/
