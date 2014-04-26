@@ -1,0 +1,418 @@
+** Actor 并发方法
+
+   在讲了几篇利用 Scala 类型系统获得灵活性和编译期安全的文章后，
+   我们回到之前谈到的话题：Scala 并发性。
+
+   前面，你已经了解到使用可组合的 ~Future~ 实现异步工作的方法。
+
+   对很多问题，这个方法都是非常合适的，
+   然而，这并不是 Scala 提供的唯一方式。
+   Scala 并发的第二大基石是 Actor 模型，该模型提供了一种完全基于进程间消息传递的并发方法。
+
+   Actor 并不是一个新的概念，这一模型最著名的实现可以在 Erlang 中找到。
+   Scala 实现自己的 Actor 库已经有很长一段时间了，
+   但是在即将到来的 Scala 2.11 版本中，它将被弃用，被 Akka 工具包永久取代，
+   事实上，在 Scala 中，Akka 长久以来就是基于 Actor 编程的标准。
+
+   这篇文章会介绍 Akka actor 模型背后的原理，以及用它来编程的一些基本知识。
+   不同于以往的大多数文章，本章不会对 Akka actor 进行深入的讨论，
+   本文的目的是为了让你熟悉 Akka 基本思想，并燃起你对它的兴趣。
+
+*** 共享可变状态的问题
+
+    如今，主流的并发解决方案是 *共享可变状态(shared mutable state)* - 大量有状态的的对象，
+    对象的状态可以被应用程序运行在不同线程的多个部分所改变。
+    通常而言，代码中会夹杂着读写锁，这是为了保证状态以可预知的方式改变，防止多个不同线程同时修改它。
+    同时，还尽量不去给大块的代码上锁，否则，会大大降低程序的运行速度。
+
+    很多时候，写出这样的代码是因为一开始没有考虑到并行的问题，
+    当并行的需求出现的时候，才修改代码以适应这多线程的世界。
+    虽然不考虑并行性的代码简单直接，但当要满足这个并行世界时，代码就变得非常难理解了。
+
+    核心问题是，低层次的同步构造（如锁和线程）难以理解、难以叙述清楚。
+    把它弄对是一件很难的事情：如果你无法解释正在发生什么，淘气的 bug 会接二连三发生，
+    无论是 *竞争条件(race conditions)* 还是 *死锁(deadlocks)* 或者只是一些奇怪的行为，
+    可能在代码用于生产环境好几个月之后，你才发现它。
+
+    而且，使用这些低层次的构造方法来达到一个可以接受的性能就是一次真正的挑战。
+
+*** Actor 模型
+
+    Actor 编程模型就是为了避免上述问题而存在的，
+    它可以让你写出高性能的并发代码，而且容易看懂和讲清楚。
+    与广泛使用的共享可变状态不同，它需要你从一开始就用并行的思想去开发应用程序，
+    否则事后很难再为它添加 Actor 支持。
+
+    这个模型的理念是：应用程序是由很多轻量级的称作 actor 的实体组成的，
+    每个 actor 只负责一个小任务，很容易就能搞清楚它的作用。
+    更复杂的商业逻辑从多个 actor 的交互中产生：
+    把任务分派给其他的 actor，或者向协作者发送消息。
+
+**** Actor 系统
+
+     actor 是很“可怜”的东西：它们不能独自存活。
+     驻留在 Akka 中的每个 actor 都由 *Actor 系统(actor system)* 创建。
+     除了创建和查找 actor 之外， ~ActorSystem~ 还提供了一整套附加功能，现在我们还不需关心这些。
+
+     要想试试这一章的示例代码，请先把下面这的解析器和依赖加入到 SBT 项目中：
+
+     #+BEGIN_SRC scala
+       resolvers +=
+         "Typesafe Releases" at "http://repo.typesafe.com/typesafe/releases"
+       libraryDependencies += "com.typesafe.akka" %% "akka-actor" % "2.2.2"
+     #+END_SRC
+
+     完成上面的事情之后，就可以创建作为 actors 生存环境的 ~ActorSystem~ ：
+
+     #+BEGIN_SRC scala
+       import akka.actor.ActorSystem
+       object Barista extends App {
+         val system = ActorSystem("Barista")
+         system.shutdown()
+       }
+     #+END_SRC
+
+     上述代码创建了一个 ~ActorSystem~ ，并命名为“Barista”，我们回到了那个煮咖啡的例子，
+     对此，你应该很熟悉了。
+
+     最后，当不再需要 actor system 时候，就把它关闭掉。谁让我们是“奉公守法”的好公民呢。
+
+**** 定义 Actor
+
+     程序包含几十个 actors 还是几百万个 actors，这取决于你的使用情况，
+     Akka 绝对能支撑的起这么多 actors。
+     你可能会对此表示不解。
+     actor 和线程并不是一对一的关系，知道这一点对理解 actor 很重要；
+     如果是一对一的关系，很快就会耗尽内存。
+     相反，由于 actor 的非阻塞特性，一个线程可以执行很多个 actors，在它们之间进行切换；
+     至于切换到哪个 actor，这取决与哪个 actor 有消息需要处理。
+
+     为了理解这是怎样的过程，我们先来创建一个非常简单的 actor - ~Barista~ ，
+     它可以接收指令，但除了向控制台打印些消息之外，它不做任何有意义的事情：
+
+     #+BEGIN_SRC scala
+       sealed trait CoffeeRequest
+       case object CappuccinoRequest extends CoffeeRequest
+       case object EspressoRequest extends CoffeeRequest
+
+       import akka.actor.Actor
+       class Barista extends Actor {
+         def receive = {
+           case CappuccinoRequest => println("I have to prepare a cappuccino!")
+           case EspressoRequest => println("Let's prepare an espresso.")
+         }
+       }
+     #+END_SRC
+
+     上述代码首先定义了 actor 需要理解的消息。
+     一般来说，使用样例类来表示有参数的信息，使用样例对象表示不需要参数的消息，
+     上面的代码就是这样做的。
+
+     任何情况下，你的消息都必须是不可变的，否则，不好的事情就会发生。
+
+     接下来的代码就是我们的 ~Barista~ 类，实际的 actor，
+     它扩展了 ~Actor~ 特质，并定义了一个 ~receive~ 方法，这个方法返回一个类型为 ~Receive~ 的值，
+     ~Receive~ 是类型 ~PartialFunction[Any, Unit]~ 的别名
+
+**** 处理信息
+
+     那 ~receive~ 方法究竟是什么意思呢？
+     而且，返回类型 ~PartialFunction[Any, Unit]~ 看起来有很多奇怪的地方。
+
+     简而言之，返回的偏函数负责处理接收到的消息。
+     无论什么时候，程序的其他部分给你的 actor 传递了一个信息，
+     偏函数最终都会处理它，这个消息作为参数传递给偏函数。
+
+***** 副作用
+
+      处理消息时，actor 可以做任何想做的事情，除了不能返回一个值。
+
+      什么！？
+
+      正如返回类型 ~Unit~ 暗示的那样，偏函数是有副作用的。
+      这听起来很震惊，毕竟一直以来，我们都在强调要使用纯函数。
+      对于一个并发编程模型来说，实际上这是很合理的。
+      程序状态驻留在 actors 里，让副作用以一种可控的方式发生在清楚定义的地方，这是完全OK的。
+      actor 接收的每个消息都是一个接一个单独处理的，根本不需要同步、锁这类玩意儿。
+
+***** 无类型
+
+     但是。。，这个偏函数不仅是有副作用的，而且无法获知接收到的消息的类型，
+     偏函数参数类型是 ~Any~ ！
+     为什么要这样做，为什么要放着 Scala 强大的类型系统不用？
+
+     这和 Akka 一些重要的设计选择有关系，
+     Akka 允许你将消息转发给其他 actors，或者安装充当负载均衡或代理的 actors，
+     消息发送者无需知道它们的存在。
+
+     在实战中， /无类型/ 通常不是问题。
+     消息本身是有类型信息的，你可以用模式匹配处理你感兴趣的消息，就像上个例子那样的做法。
+
+     不过有些时候，确实会引发一些淘气的 bug，编译器无法帮你捕捉到它们。
+     如果你太喜欢强类型系统带来的好处，不想放弃使用它，
+     Akka 的实验项目 Typed Channels[fn:1] 可能对你有帮助。
+
+***** 异步和非阻塞
+
+      前文我写到，在 Akka 中 actor 接收到的消息最终会被处理掉。
+      要记住：消息的发送和处理是以异步和非阻塞的方式进行的。
+      发送者不会阻塞到消息被接受者处理的那个时候。
+      它可以继续自己的工作，或许还期待着一个回信，或许压根就不在乎。
+
+      当某个组件向一个 actor 发送消息时，
+      这个消息会存放在 actor 的信箱（简单来说是一个队列）里。
+      将消息放入接受者的信箱里是一个非阻塞操作，就是说，
+      发送者无需等到信息真的被投到信箱里。
+
+      当有新信息到达 actor 的信箱里时，调度器(dispatcher)会觉察到，当然这也是异步的。
+      如果前面没有消息需要处理，就会从执行环境中拿出一个空闲的线程，分配给 actor，让它处理这个新的消息。
+      一旦 actor 处理完前面的消息，调度器就会从待处理的信箱中调度下一个消息给 actor。
+
+      只有当 actor 处理消息的时候，线程才会阻塞。
+      虽然这并不会阻塞消息发送者的线程，但长时间的处理操作会降低程序整体的性能，
+      因为其他所有的 actors 必须由剩下的线程来调度。
+
+      因此， ~Receive~ 偏函数需要遵循的一个核心原则是，尽可能的少花时间。
+      最重要的是，避免在消息处理中使用阻塞代码。
+
+      当然，有些事情你完全无法阻止 - 大多数的数据库驱动程序仍然是阻塞的，
+      而你想在基于 actor 的程序中进行数据持久化和数据查询。
+      这个问题是有解决办法的，不过这篇文章不会讲到它们。
+
+**** 创建 Actor
+
+     ~Barista~ 的定义已经做得很好了，但是该怎么在程序中使用它呢？
+     首先，得去创建一个 ~Barista~ 实例。可能你想调用构造器来创建它：
+
+     #+BEGIN_SRC scala
+       val barista = new Barista // will throw exception
+     #+END_SRC
+
+     这样不行！
+     Akka 会回敬你一个 ~ActorInitializationException~ 。
+     为了使整个 actor 群体正确工作，actors 必须由 ~ActorSystem~ 和它的组件来管理。
+     因此，你应该向 actor system 请求一个新的 actor 实例：
+
+     #+BEGIN_SRC scala
+       import akka.actor.{ActorRef, Props}
+       val barista: ActorRef = system.actorOf(Props[Barista], "Barista")
+     #+END_SRC
+
+     定义在 ~ActorSystem~ 上的 ~actorOf~ 方法期待一个 ~Props~ 实例，
+     这个实例提供了配置 actor 的方式，同时 ~actorOf~ 还接受一个可选的字符串，作为 actor 实例的名称。
+     在这里，我们使用最简单的形式来创建这样的一个 ~Props~ 实例：
+     给 ~Props~ 伴生对象的 ~apply~ 方法提供一个类型参数，这个类型参数就是待创建的 actor 的类型。
+     然后 Akka 会调用默认的构造器来创建 actor 对象。
+
+     要注意：方法 ~actorOf~ 返回的对象类型不是 ~Barista~ ，而是 ~ActorRef~ 。
+     actors 从来不会和其他 actors 直接进行通信，因此，一般不会有对 actor 实例的直接引用。
+     程序中的 actors 和其他组件是通过接收信息的 actor 的引用来发送消息的。
+
+     ~ActorRef~ 是作为真实 actor 的代理而存在的。
+     这种设计很方便，因为 ~ActorRef~ 可以被序列化，成为一个远程 actor 的代理。
+     对获得 ~ActorRef~ 的组件来说，actor 的地点（在同一 JVM 里，还是在其他机器上）是完全透明的。
+     我们把这个性质叫做 *位置透明(location transparency)* 。
+
+     #+BEGIN_QUOTE
+     请注意， ~ActorRef~ 没有类型参数。
+     一个 ~ActorRef~ 可以和另一个进行交换，这允许你向任意的 ~ActorRef~ 发送任意的消息。
+     这是设计使然。
+     而且正如前文提到的那样，你可以在不对发送者做任何改变的前提下，
+     轻易的修改 actor system 的拓扑结构。
+     #+END_QUOTE
+
+**** 发送信息
+
+     现在已经创建了一个 ~Barista~ 实例，而且还存在与之关联的 ~ActorRef~ ，我们可以给它发送消息了。
+     这是通过 ~ActorRef~ 上的 ~!~ 方法来实现的：
+
+     #+BEGIN_SRC scala
+       barista ! CappuccinoRequest
+       barista ! EspressoRequest
+       println("I ordered a cappuccino and an espresso")
+     #+END_SRC
+
+     ~!~ 方法调用是一个一劳永逸的操作：告诉 ~Barista~ 你想要一杯卡布奇诺，然后不用去等待它的响应。
+     在 Akka 中，这是和其他 actors 打交道最直接的方式。
+     调用这个方法，就是告诉 Akka 把你的消息放入接受者的信箱里。
+     前文提到过，这个操作是非阻塞的，而且你的消息最终肯定会得到接受者的处理。
+
+     鉴于 actor 的异步特性，上述代码的结果是不确定的。
+     结果看起来可能是这个样子：
+
+     #+BEGIN_SRC text
+       I have to prepare a cappuccino!
+       I ordered a cappuccino and an espresso
+       Let's prepare an espresso.
+     #+END_SRC
+
+     尽管两个消息最先发送，但我们自己的输出打印在这两个消息之间。
+
+**** 响应消息
+
+     有时候，要求别人做什么是不够的。
+     你可能还想要给信息发送者回应一个消息，当然这个动作是异步进行的。
+
+     为了支持这样的做法，actors 有一个叫做 ~sender~ 的方法，它返回最近一个消息的发送者的 ~ActorRef~ ，
+     比如，当前你正在处理的这个。
+
+     但是，它是怎么知道那个发送者的呢？
+     答案可以在 ~!~ 方法签名中找到，这个方法有一个隐式参数列表：
+
+     #+BEGIN_SRC scala
+       def !(message: Any)(implicit sender: ActorRef = Actor.noSender): Unit
+     #+END_SRC
+
+     在一个 actor 上调用它的时候，这个 actor 的 ~ActorRef~ 就会作为隐式参数 ~sender~ 传递出去。
+
+     下列代码修改了 ~Barista~ ，当接收到 ~CoffeeRequest~ 时，
+     在输出一些信息之前， ~Barista~ 会先向发送者发送一个 ~Bill~ 消息：
+
+     #+BEGIN_SRC scala
+       case class Bill(cents: Int)
+       case object ClosingTime
+       class Barista extends Actor {
+         def receive = {
+           case CappuccinoRequest =>
+             sender ! Bill(250)
+             println("I have to prepare a cappuccino!")
+           case EspressoRequest =>
+             sender ! Bill(200)
+             println("Let's prepare an espresso.")
+           case ClosingTime => context.system.shutdown()
+         }
+       }
+     #+END_SRC
+
+     代码还引入了一个新的消息 ~ClosingTime~ ，当接收到这个消息时， ~Barista~ 会关闭整个 actor system，
+     所有的 actors 都可以通过它们的 ~ActorContext~ 来访问 actor system 。
+
+     现在来介绍表示顾客的 actor：
+
+     #+BEGIN_SRC scala
+       case object CaffeineWithdrawalWarning
+       class Customer(caffeineSource: ActorRef) extends Actor {
+         def receive = {
+           case CaffeineWithdrawalWarning => caffeineSource ! EspressoRequest
+           case Bill(cents) => println(s"I have to pay $cents cents, or else!")
+         }
+       }
+     #+END_SRC
+
+     这个 actor 是一个真正的“咖啡嗜好者”，它需要能够购买新的咖啡。
+     在构造器里，我们给它传递了一个 ~ActorRef~ ，这就是它的 ~caffeineSource~ 。
+     它不知道这个 ~ActorRef~ 是指向 ~Barista~ 还是其他的什么东西，
+     但它知道它可以向这个 ~ActorRef~ 发送 ~CoffeeRequest~ 消息，这是它需要关心的所有事情。
+
+     最后，创建这两种 actors，向顾客发送 ~CaffeineWithdrawalWarning~ 来启动整个事件：
+
+     #+BEGIN_SRC scala
+       val barista = system.actorOf(Props[Barista], "Barista")
+       val customer = system.actorOf(Props(classOf[Customer], barista), "Customer")
+       customer ! CaffeineWithdrawalWarning
+       barista ! ClosingTime
+     #+END_SRC
+
+     对于 ~Customer~ actor，这里使用了一个不同的工厂方法来创建 ~Props~ 实例：
+     传递要实例化的 actor 类型，以及需要的参数。
+     ~Customer~ actor 需要一个 ~Barista~ 的 ~ActorRef~ 。
+
+     给顾客发送一个 ~CaffeineWithdrawalWarning~ 消息，会让顾客发送 ~EspressoRequest~ 消息给
+     咖啡馆服务生，服务生反过来给顾客回应一个 ~Bill~ 消息。
+     结果输出可能是这个样子：
+
+     #+BEGIN_SRC text
+       Let's prepare an espresso.
+       I have to pay 200 cents, or else!
+     #+END_SRC
+
+     处理 ~EspressoRequest~ 请求的时候， ~Barista~ 发送一个消息给该请求的发送者，也就是 ~Customer~ 。
+     但是，这个动作不会阻塞， ~Barista~ 可以继续处理 ~EspressoRequest~ ，这里只是简单的打印一行文本。
+     不久后，~Customer~ 开始处理 ~Bill~ 消息，打印另一条文本。
+
+**** 问问题
+
+     有时候，向一个 actor 发送消息并期待在之后接收一个返回的消息不是一个可选的选项，
+     一个非常常见的使用场景是，组件和 actors 之间的交互，而不是 actor 和 actor 之间。
+     驻留在 actor 世界外面的这些组件是收不到信息的。
+
+     Akka 提供了 *询问(ask)* 来支持这种情形，在基于 actor 的并行和基于 future 的并行之间搭起了一座桥梁。
+     从使用者角度来看，它可能是这样工作的：
+
+     #+BEGIN_SRC scala
+       import akka.pattern.ask
+       import akka.util.Timeout
+       import scala.concurrent.duration._
+       implicit val timeout = Timeout(2.second)
+       implicit val ec = system.dispatcher
+       val f: Future[Any] = barista2 ? CappuccinoRequest
+       f.onSuccess {
+         case Bill(cents) => println(s"Will pay $cents cents for a cappuccino")
+       }
+     #+END_SRC
+
+     首先，你需要导入 *ask* 的语法支持，创建一个隐式的 ~timeout~ ，用在 ~?~ 方法返回的 ~Future~ 上。
+     同时， ~Future~ 需要一个 ~ExecutionContext~ ，这里，我们使用 ~ActorSystem~ 的默认调度器，
+     它也是一个 ~ExecutionContext~ 。
+
+     正如你看到的那样，返回的 future 没有类型，它是一个 ~Future[Any]~ 。
+     这应该不算太意外，本质上讲，它是一个从 actor 接收的消息，这消息是没有类型的。
+
+     对于被询问的 actor 来说，这和向另一个 actor 发送消息没什么两样。
+     因此我们的 ~Barista~ 无需任何更改就能顺利工作。
+
+     一旦被询问的 actor 给询问者返回了一个消息，和返回值 ~Future~ 关联的 ~Promise~ 就完成了。
+
+     #+BEGIN_QUOTE
+     一般优先使用 ~telling~ 而不是 ~asking~ ，因为前者更省资源。
+     Akka 不适合礼貌的人。
+     当然，有些情况下，必须得使用 ~asking~ ，这样做完全没问题！
+     #+END_QUOTE
+
+**** 有状态的 Actor
+
+     每个 actor 可能会维护一个内部状态，但这不是强求的。
+     有时候，整个程序的状态很大一部分是由在 actors 之间传递的不可变消息组成的。
+
+     一个 actor 一次只会处理一个消息，
+     处理的时候，可能会修改它的内部状态。
+     这说明 actor 里有某种可变的东西，但由于每个消息都是隔离处理的，
+     内部状态不可能因为并行问题而出现差错。
+
+     为了说明这一点，我们把无状态的 ~Barista~ 变成有状态的：添加一个订单个数计数器。
+
+     #+BEGIN_SRC scala
+       class Barista extends Actor {
+         var cappuccinoCount = 0
+         var espressoCount = 0
+         def receive = {
+           case CappuccinoRequest =>
+             sender ! Bill(250)
+             cappuccinoCount += 1
+             println(s"I have to prepare cappuccino #$cappuccinoCount")
+           case EspressoRequest =>
+             sender ! Bill(200)
+             espressoCount += 1
+             println(s"Let's prepare espresso #$espressoCount.")
+           case ClosingTime => context.system.shutdown()
+         }
+       }
+     #+END_SRC
+
+     上述代码引入了两个 ~var~ ， ~cappuccinoCount~ 和 ~espressoCount~ 会随着订单相应的增长。
+     实际上，这也是我们第一次使用 ~var~ 关键字。
+     虽然避免在函数式编程里使用它，但要想使 actor 带有状态，这是唯一的方式。
+     因为隔离处理每个消息，上述代码很像是在非 actor 环境中使用 ~AtomicInteger~ 。
+
+*** 结论
+
+    这里就结束对 actor 并发编程模型以及在 Akka 中的用法的介绍。
+    虽然只触及了皮毛，且忽略了 Akka 的一些重要概念，
+    我仍希望给出的这些知识足够让你对并发有一个基本的理解，并激发你对此的兴趣。
+
+    下一篇文章，我会详细说明这一章的例子，添加一些有意义的行为，介绍 Akka actor 背后更多的理念。
+    其中就包括 actor system 的错误处理机制。
+
+* Footnotes
+
+[fn:1] http://doc.akka.io/docs/akka/2.3-M2/scala/typed-channels.html
