@@ -61,18 +61,18 @@
     下面的代码是我们的提取器：
 
 
-    #+BEGIN_SRC
-    trait User {
-      def name: String
-    }
-    class FreeUser(val name: String) extends User
-    class PremiumUser(val name: String) extends User
-    object FreeUser {
-      def unapply(user: FreeUser): Option[String] = Some(user.name)
-    }
-    object PremiumUser {
-      def unapply(user: PremiumUser): Option[String] = Some(user.name)
-    }
+    #+BEGIN_SRC scala
+      trait User {
+        def name: String
+      }
+      class FreeUser(val name: String) extends User
+      class PremiumUser(val name: String) extends User
+      object FreeUser {
+        def unapply(user: FreeUser): Option[String] = Some(user.name)
+      }
+      object PremiumUser {
+        def unapply(user: PremiumUser): Option[String] = Some(user.name)
+      }
     #+END_SRC
 
     现在，可以在REPL中使用它了：
@@ -301,8 +301,6 @@
     通常，只有当从无法掌控的类型中提取数据，或者是需要其他进行模式匹配的方法时，才需要实现自己的提取器。
 
     #+BEGIN_QUOTE
-    **** 提取URL
-
     提取器的一种常见用法是从字符串中提取出有意义的值，
     作为练习，想一想如何实现 =URLExtractor= 以匹配代表 URL 的字符串。
     #+END_QUOTE
