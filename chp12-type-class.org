@@ -83,8 +83,13 @@
 
     对于这种问题，Ruby 的做法是 *猴子补丁（monkey patching）* ，
     扩展新类型让它看起来像一个 ~Number~ ，不过这样做污染了全局命名空间。
-    年轻时遭到 “四人帮”[fn:1] 打击的 Java 开发者，
+    年轻时遭到 “四人帮” 打击的 Java 开发者，
     会认为 *适配器（Adpater）* 能解决上面所有问题：
+
+    #+BEGIN_QUOTE
+    “四人帮”这里指的是设计模式一书的作者：Erich Gamma、Richard Helm、Ralph Johnson 和 John Vlissides，
+    具体见：[[http://en.wikipedia.org/wiki/Design_Patterns]]
+    #+END_QUOTE
 
     #+BEGIN_SRC scala
       object Statistics {
@@ -355,8 +360,3 @@
 
     你将看到这种技术在编写由其他人使用的库时尤其有用，
     但在应用程序代码中，为了减少模块之间的耦合，类型类也是有用武之地的。
-
-* Footnotes
-
-[fn:1] 这里指的是设计模式一书的作者：Erich Gamma、Richard Helm、Ralph Johnson 和 John Vlissides，
-具体见：http://en.wikipedia.org/wiki/Design_Patterns

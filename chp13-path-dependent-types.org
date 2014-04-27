@@ -58,10 +58,15 @@
       starTrek.createFanFiction(lovestruck = jadzia, objectOfDesire = luke)
     #+END_SRC
 
-    多么恐怖的事情！某个人创建了一段同人小说，婕琪‧戴克斯[fn:1] 和 天行者卢克[fn:2] 竟然在约会！
+    多么恐怖的事情！某个人创建了一段同人小说，婕琪戴克斯和天行者卢克竟然在约会！
     显然，我们不应该容忍这样的事情。
     你的第一直觉可能是，在运行期做一些检查，保证约会的两个角色来自同一个特许商。
     比如说：
+
+    #+BEGIN_QUOTE
+    婕琪戴克斯：星际迷航中的角色：[[http://en.wikipedia.org/wiki/Jadzia_Dax]]
+    天行者卢克：星球大战中的角色：[[http://en.wikipedia.org/wiki/Luke_Skywalker]]
+    #+END_QUOTE
 
     #+BEGIN_SRC scala
       object Franchise {
@@ -227,7 +232,7 @@
 
     一个最普遍的用法是和 *cake pattern* 一起使用，
     cake pattern 是一种组件组合和依赖管理的技术。
-    想要学习更多 cake pattern 和路径依赖类型的使用，可以参考 Debasish Ghosh 的一篇文章[fn:3]。
+    想要学习更多 cake pattern 和路径依赖类型的使用，可以参考 Debasish Ghosh 的 [[http://debasishg.blogspot.ie/2013/02/modular-abstractions-in-scala-with.html][一篇文章]] 。
 
     一般来说，当你想确保由另外一种类型的实例创建和管理的对象不能被交换或者混合，无论是无意的还是有意的，
     那路径依赖类型是一个正确的选择。
@@ -235,14 +240,4 @@
     当你想把一些只有在运行期才知道的信息编码到类型里，
     比如说：异构列表、自然数的类型级别表示，以及在类型中携带大小的集合，
     路径依赖类型和依赖方法类型扮演这至关重要的角色。
-    Miles Sabin 正在 Shapeless[fn:4] 中探索着 Scala 类型系统的极限。
-
-* Footnotes
-
-[fn:1] 星际迷航中的角色：http://en.wikipedia.org/wiki/Jadzia_Dax
-
-[fn:2] 星球大战中的角色：http://en.wikipedia.org/wiki/Luke_Skywalker
-
-[fn:3] http://debasishg.blogspot.ie/2013/02/modular-abstractions-in-scala-with.html
-
-[fn:4] https://github.com/milessabin/shapeless
+    Miles Sabin 正在 [[https://github.com/milessabin/shapeless][Shapeless]] 中探索着 Scala 类型系统的极限。

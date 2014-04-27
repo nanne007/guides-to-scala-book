@@ -150,7 +150,7 @@
 
      不过有些时候，确实会引发一些淘气的 bug，编译器无法帮你捕捉到它们。
      如果你太喜欢强类型系统带来的好处，不想放弃使用它，
-     Akka 的实验项目 Typed Channels[fn:1] 可能对你有帮助。
+     Akka 的实验项目 [[http://doc.akka.io/docs/akka/2.3-M2/scala/typed-channels.html][Typed Channels]] 可能对你有帮助。
 
 ***** 异步和非阻塞
 
@@ -412,7 +412,3 @@
 
     下一篇文章，我会详细说明这一章的例子，添加一些有意义的行为，介绍 Akka actor 背后更多的理念。
     其中就包括 actor system 的错误处理机制。
-
-* Footnotes
-
-[fn:1] http://doc.akka.io/docs/akka/2.3-M2/scala/typed-channels.html

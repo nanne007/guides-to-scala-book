@@ -10,7 +10,7 @@
 
    一个明显的方式是通过调用已知的函数来实现一个新的函数。
    然而，还有其他的方式来重用已知函数：这一章里，我会讨论一些函数式编程的基本原理。
-   你将会学到如何使用高阶函数，以在新环境中重用已有的代码时，遵守 DRY[fn:1] 原则。
+   你将会学到如何使用高阶函数，以在新环境中重用已有的代码时，遵守 [[http://en.wikipedia.org/wiki/Don%27t_repeat_yourself][DRY]] 原则。
 
 *** 高阶函数
 
@@ -264,8 +264,3 @@
 
     下一章，我们继续探索函数组合的方式：
     /函数部分应用和柯里化(Partial Function Application and Currying)/ 。
-
-
-* Footnotes
-
-[fn:1] http://en.wikipedia.org/wiki/Don%27t_repeat_yourself

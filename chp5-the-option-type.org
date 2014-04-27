@@ -20,7 +20,7 @@
     值 =null= 通常被滥用来表征一个可能会缺失的值。
 
     某些语言以一种特殊的方法对待 =null= 值，或者允许你安全的使用可能是 =null= 的值。
-    比如说，Groovy 有安全运算符[fn:1]）用于访问属性，
+    比如说，Groovy 有安全运算符(Safe Navigation Operator)用于访问属性，
     这样 =foo?.bar?.baz= 不会在 =foo= 或 =bar= 是 =null= 时引发异常，而是直接返回 =null= 。
     然而，Groovy 中没有什么机制来强制你使用此运算符，所以如果你忘记使用它，那就完蛋了！
 
@@ -107,7 +107,7 @@
       } // will print "John"
     #+END_SRC
 
-    这和 Guava 库[fn:2]中的 =Optional= 使用方法类似。
+    这和 [[https://code.google.com/p/guava-libraries][Guava 库]] 中的 =Optional= 使用方法类似。
     不过这种使用方式太过笨重。
     更重要的是，使用 =get= 之前，你可能会忘记用 =isDefined= 做检查，这会导致运行期出现异常。
     这样一来，相对于 =null= ，使用 =Option= 并没有什么优势。
@@ -352,9 +352,3 @@
     它们都有一个非常统一的使用方式，这种使用方式既强大又优雅。
 
     下一章，你将学习 Scala 错误处理的惯用法。
-
-*** 脚注
-
-[fn:1] Safe Navigation Operator
-
-[fn:2] https://code.google.com/p/guava-libraries

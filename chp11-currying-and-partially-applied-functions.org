@@ -252,7 +252,7 @@
      但将它收集到你的工具链里是非常不错的，
      并且对展示部分函数应用和柯里化更广泛的功用来说，这也是一个不错的例子。
      如果你想知道更多关于这一点的知识，推荐看 Debasish Ghosh 的幻灯片
-     “Dependency Injection in Scala[fn:1]”，我就是在这个幻灯片里第一次接触到这种技术。
+     “[[http://de.slideshare.net/debasishg/dependency-injection-in-scala-beyond-the-cake-pattern][Dependency Injection in Scala]]”，我就是在这个幻灯片里第一次接触到这种技术。
 
 *** 总结
 
@@ -260,7 +260,3 @@
     并且，在这个基础上，得到了很大的灵活性，可以用多种不同的形式重用函数。
     部分函数应用和柯里化，这两者或多或少都可以实现同样的效果，只是有时候其中的某一个是更优雅的解决方案。
     下一章会继续探讨保持灵活性的方法：Scala 的类型类（type class）。
-
-* Footnotes
-
-[fn:1] http://de.slideshare.net/debasishg/dependency-injection-in-scala-beyond-the-cake-pattern
