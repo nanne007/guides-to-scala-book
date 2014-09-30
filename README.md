@@ -1,3 +1,5 @@
+# Scala 初学指南
+
 ## 这本书是什么
 
 本书是 [The Neophyte's Guide to Scala](http://danielwestheide.com/scala/neophytes.html) 的中文翻译。
