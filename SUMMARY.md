@@ -7,3 +7,4 @@
 * [无处不在的模式](chp3-pattern-everywhere.md)
 * [模式匹配与匿名函数](chp4-pattern-matching-anonymous-functions.md)
 * [类型 Option](chp5-the-option-type.md)
+* [Try 与错误处理](chp6-error-handling-with-try.md)
