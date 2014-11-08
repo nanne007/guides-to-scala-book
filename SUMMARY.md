@@ -11,3 +11,4 @@
 * [类型 Either](chp7-the-either-type.md)
 * [类型 Future](chp8-welcome-to-the-future.md)
 * [实战中的 Promise 和 Future](chp9-promises-and-futures-in-practice.md)
+* [高阶函数与 DRY](chp10-staying-DRY-with-higher-order-functions.md)
