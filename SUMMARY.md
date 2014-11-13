@@ -15,3 +15,4 @@
 * [函数的部分应用和柯里化](chp11-currying-and-partially-applied-functions.md)
 * [类型类](chp12-type-class.md)
 * [路径依赖类型](chp13-path-dependent-types.md)
+* [结语](extra.md)
