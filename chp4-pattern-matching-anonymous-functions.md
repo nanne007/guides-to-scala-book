@@ -47,7 +47,7 @@ wordsWithoutOutliers(wordFrequencies) // List("habitual", "homely", "society")
 
 ``` scala
 def wordsWithoutOutliers(wordFrequencies: Seq[(String, Int)]): Seq[String] =
- wordFrequencies.filter { case (_, f) `> f > 3 && f < 25 } map { case (w, _) `> w }
+ wordFrequencies.filter { case (_, f) => f > 3 && f < 25 } map { case (w, _) => w }
 ```
 
 在两个匿名函数里，我们只使用了一个匹配案例，因为我们知道这个样例总是会匹配成功，
@@ -57,8 +57,8 @@ def wordsWithoutOutliers(wordFrequencies: Seq[(String, Int)]): Seq[String] =
 如果把这些匿名函数赋给其他值，你也会看到它们有着正确的类型：
 
 ``` scala
-val predicate: (String, Int) `> Boolean ` { case (_, f) => f > 3 && f < 25 }
-val transformFn: (String, Int) `> String ` { case (w, _) => w }
+val predicate: (String, Int) => Boolean = { case (_, f) => f > 3 && f < 25 }
+val transformFn: (String, Int) => String = { case (w, _) => w }
 ```
 
 
@@ -90,7 +90,7 @@ def collect[B](pf: PartialFunction[A, B]): Seq[B]
 概括来说，偏函数是一个一元函数，它只在部分输入上有定义，
 并且允许使用者去检查其在一个给定的输入上是否有定义。
 为此，特质 `PartialFunction` 提供了一个 `isDefinedAt` 方法。
-事实上，类型 `PartialFunction[-A, +B]` 扩展了类型 `(A) ＝> B`
+事实上，类型 `PartialFunction[-A, +B]` 扩展了类型 `(A) => B`
 （一元函数，也可以写成 `Function1[A, B]` ）。
 模式匹配型的匿名函数的类型就是 `PartialFunction` 。
 
