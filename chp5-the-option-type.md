@@ -217,7 +217,7 @@ val gender3 = UserRepository.findById(3).flatMap(_.gender) // gender is None
 现在结果就变成了 `Option[String]` 类型，
 如果 `user` 和 `gender` 都有值，那结果就会是 `Some` 类型，反之，就得到一个 `None` 。
 
-要理解这是什么原理，让我们看看当 `flatMap` 一个 `List[List[A]` 时，会发生什么？
+要理解这是什么原理，让我们看看当 `flatMap` 一个 `List[List[A]]` 时，会发生什么？
 （要记得， Option 就像一个集合，比如列表）
 
 ``` scala
