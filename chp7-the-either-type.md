@@ -323,7 +323,7 @@ val blacklist = List(
 下面的代码展示了该如何处理黑名单的：
 
 ``` scala
-al checkedBlacklist: List[Either[URL, Set[Citizen]]] =
+val checkedBlacklist: List[Either[URL, Set[Citizen]]] =
   blacklist.map(resource =>
     if (resource.visitors.isEmpty) Left(resource.url)
     else Right(resource.visitors))
