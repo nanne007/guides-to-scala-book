@@ -68,7 +68,7 @@ object GivenNames {
 
 ``` scala
   def greetWithFirstName(name: String) = name match {
-    case GivenNames(firstName, _*) => "Good morning, $firstname!"
+    case GivenNames(firstName, _*) => s"Good morning, $firstname!"
     case _ => "Welcome! Please make sure to fill in your name!"
   }
 ```
@@ -118,7 +118,7 @@ object Names {
 ``` scala
 def greet(fullName: String) = fullName match {
   case Names(lastName, firstName, _*) =>
-    "Good morning, $firstName $lastName!"
+    s"Good morning, $firstName $lastName!"
   case _ =>
     "Welcome! Please make sure to fill in your name!"
 }
