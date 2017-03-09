@@ -122,7 +122,7 @@ parseURL("garbage").map(_.getProtocol)
 
 ``` scala
 import java.io.InputStream
-def inputStreamForURL(url: String): Try[Try[Try[InputStream]]] ` parseURL(url).map { u `>
+def inputStreamForURL(url: String): Try[Try[Try[InputStream]]] = parseURL(url).map { u =>
  Try(u.openConnection()).map(conn => Try(conn.getInputStream))
 }
 ```
@@ -158,7 +158,7 @@ def inputStreamForURL(url: String): Try[InputStream] =
 否则的话， `filter` 就返回原本的那个 `Success` ，什么都不会变：
 
 ``` scala
-def parseHttpURL(url: String) ` parseURL(url).filter(_.getProtocol `= "http")
+def parseHttpURL(url: String) = parseURL(url).filter(_.getProtocol == "http")
 parseHttpURL("http://apache.openmirror.de") // results in a Success[URL]
 parseHttpURL("ftp://mirror.netcologne.de/apache.org") // results in a Failure[URL]
 ```

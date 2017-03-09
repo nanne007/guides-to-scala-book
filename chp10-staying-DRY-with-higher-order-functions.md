@@ -72,7 +72,7 @@ def newMailsForUser(mails: Seq[Email], f: EmailFilter) = mails.filter(f)
 这四个 *vals* 都是可以返回 `EmailFilter` 的函数，
 前两个接受代表发送者的 `Set[String]` 作为输入，后两个接受代表邮件内容长度的 `Int` 作为输入。
 
-可以使用这些函数来创建 `EmialFilter` ：
+可以使用这些函数来创建 `EmailFilter` ：
 
 ``` scala
   val emailFilter: EmailFilter = notSentByAnyOf(Set("johndoe@example.com"))
@@ -169,7 +169,7 @@ Scala 函数的可组合能力现在就用的上了：给定两个函数 `f` 、
 `none` 返回的是 `any` 返回函数的补，只要存在一个成真的谓词， `none` 的条件就无法满足。
 最后， `every` 利用 `none` 和 `any` 来判定是否每个谓词的补对于输入 `a` 都不成真。
 
-可以使用它们来创建代表用户设置的组合 `EmialFilter` ：
+可以使用它们来创建代表用户设置的组合 `EmailFilter` ：
 
 ``` scala
   val filter: EmailFilter = every(
@@ -183,7 +183,7 @@ Scala 函数的可组合能力现在就用的上了：给定两个函数 `f` 、
 
 再举一个函数组合的例子。回顾下上面的场景，
 邮件提供者不仅想让用户可以配置邮件过滤器，还想对用户发送的邮件做一些处理。
-这是一些简单的 `Emial => Email` 函数，一些可能的处理函数是：
+这是一些简单的 `Email => Email` 函数，一些可能的处理函数是：
 
 ``` scala
   val addMissingSubject = (email: Email) =>
