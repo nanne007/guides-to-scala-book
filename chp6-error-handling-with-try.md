@@ -82,7 +82,7 @@ def parseURL(url: String): Try[URL] = Try(new URL(url))
 上例中，我们还用了 Try 伴生对象里的 `apply` 工厂方法，这个方法接受一个类型为 `A` 的 *传名参数*，
 这意味着， `new URL(url)` 是在 `Try` 的 `apply` 方法里执行的。
 
-`apply` 方法不会捕获任何非致命的异常，仅仅返回一个包含相关异常的 Failure 实例。
+`apply` 方法会捕获任何非致命的异常，返回一个包含相关异常的 Failure 实例。
 
 因此， `parseURL("http://danielwestheide.com")` 会返回一个 `Success[URL]` ，包含了解析后的网址，
 而 `parseULR("garbage")` 将返回一个含有 `MalformedURLException` 的 `Failure[URL]`。
